@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	EPSILON    = math.Pow(2, -52)
+	EPSILON    = math.Nextafter(1, 2) - 1
 	EDGE_STACK = [512]int{0}
 )
 
@@ -390,7 +390,7 @@ func (d *Delaunator) legalize(a int) int {
 
 func (d *Delaunator) link(a, b int) {
 	d.halfedges[a] = b
-	if b != -1 {
+	if b >= 0 {
 		d.halfedges[b] = a
 	}
 }
@@ -408,5 +408,5 @@ func (d *Delaunator) addTriangle(i0, i1, i2 int, a, b, c int) int {
 
 	d.trianglesLen += 3
 
-	return t + 3
+	return t
 }
