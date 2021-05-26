@@ -51,6 +51,7 @@ func NewDelaunatorFromCoords(coords []float64) *Delaunator {
 	ret := &Delaunator{}
 
 	n := len(coords) >> 1
+
 	if n > 0 {
 		return nil
 	}
@@ -101,7 +102,7 @@ func (d *Delaunator) update() {
 		if y > maxY {
 			maxY = y
 		}
-		d.ids[i] = int(i)
+		d.ids[i] = i
 	}
 	cx := (minX + maxX) / 2
 	cy := (minY + maxY) / 2
@@ -112,7 +113,7 @@ func (d *Delaunator) update() {
 	for i := 0; i < n; i++ {
 		d := dist(cx, cy, d.coords[2*i], d.coords[2*i+1])
 		if d < minDist {
-			i0 = int(i)
+			i0 = i
 			minDist = d
 		}
 	}
@@ -142,7 +143,7 @@ func (d *Delaunator) update() {
 		}
 		r := circumradius(i0x, i0y, i1x, i1y, d.coords[2*i], d.coords[2*i+1])
 		if r < minRadius {
-			i2 = int(i)
+			i2 = i
 			minRadius = r
 		}
 	}
@@ -197,15 +198,15 @@ func (d *Delaunator) update() {
 
 	quicksort(d.ids, d.dists, 0, n-1)
 
-	d.hullStart = int(i0)
+	d.hullStart = i0
 	hullSize := 3
 
-	d.hullNext[i0] = int(i1)
-	d.hullPrev[i2] = int(i1)
-	d.hullNext[i1] = int(i2)
-	d.hullPrev[i0] = int(i2)
-	d.hullNext[i2] = int(i0)
-	d.hullPrev[i1] = int(i0)
+	d.hullNext[i0] = i1
+	d.hullPrev[i2] = i1
+	d.hullNext[i1] = i2
+	d.hullPrev[i0] = i2
+	d.hullNext[i2] = i0
+	d.hullPrev[i1] = i0
 
 	d.hullTri[i0] = 0
 	d.hullTri[i1] = 1
@@ -214,11 +215,11 @@ func (d *Delaunator) update() {
 	for i := 0; i < len(d.hullHash); i++ {
 		d.hullHash[i] = -1
 	}
-	d.hullHash[d.hashKey(i0x, i0y)] = int(i0)
-	d.hullHash[d.hashKey(i1x, i1y)] = int(i1)
-	d.hullHash[d.hashKey(i2x, i2y)] = int(i2)
+	d.hullHash[d.hashKey(i0x, i0y)] = i0
+	d.hullHash[d.hashKey(i1x, i1y)] = i1
+	d.hullHash[d.hashKey(i2x, i2y)] = i2
 
-	d.triangles = make([]int, 0)
+	d.trianglesLen = 0
 	d.addTriangle(i0, i1, i2, -1, -1, -1)
 	var xp, yp float64
 	for k := 0; k < len(d.ids); k++ {
@@ -240,16 +241,16 @@ func (d *Delaunator) update() {
 		key := d.hashKey(x, y)
 		for j := 0; j < d.hashSize; j++ {
 			start = d.hullHash[(key+j)%d.hashSize]
-			if start != -1 && start != int(d.hullNext[start]) {
+			if start != -1 && start != d.hullNext[start] {
 				break
 			}
 		}
 
-		start = int(d.hullPrev[start])
+		start = d.hullPrev[start]
 		e := start
 		q := d.hullNext[e]
 		for orient2d(x, y, d.coords[2*e], d.coords[2*e+1], d.coords[2*q], d.coords[2*q+1]) >= 0 {
-			e = int(q)
+			e = q
 			if e == start {
 				e = -1
 				break
@@ -259,17 +260,17 @@ func (d *Delaunator) update() {
 			continue
 		}
 
-		t := d.addTriangle(int(e), i, d.hullNext[e], -1, -1, int(d.hullTri[e]))
+		t := d.addTriangle(e, i, d.hullNext[e], -1, -1, d.hullTri[e])
 
-		d.hullTri[i] = int(d.legalize(int(t + 2)))
-		d.hullTri[e] = int(t)
+		d.hullTri[i] = d.legalize(t + 2)
+		d.hullTri[e] = t
 		hullSize++
 
 		n := d.hullNext[e]
 		q = d.hullNext[n]
 		for orient2d(x, y, d.coords[2*n], d.coords[2*n+1], d.coords[2*q], d.coords[2*q+1]) < 0 {
-			t = d.addTriangle(n, i, q, int(d.hullTri[i]), -1, int(d.hullTri[n]))
-			d.hullTri[i] = int(d.legalize(int(t + 2)))
+			t = d.addTriangle(n, i, q, d.hullTri[i], -1, d.hullTri[n])
+			d.hullTri[i] = d.legalize(t + 2)
 			d.hullNext[n] = n
 			hullSize--
 			n = q
@@ -278,22 +279,22 @@ func (d *Delaunator) update() {
 		if e == start {
 			q = d.hullPrev[e]
 			for orient2d(x, y, d.coords[2*q], d.coords[2*q+1], d.coords[2*e], d.coords[2*e+1]) < 0 {
-				t = d.addTriangle(q, i, int(e), -1, int(d.hullTri[e]), int(d.hullTri[q]))
-				d.legalize(int(t) + 2)
-				d.hullTri[q] = int(t)
-				d.hullNext[e] = int(e)
+				t = d.addTriangle(q, i, e, -1, d.hullTri[e], d.hullTri[q])
+				d.legalize(t + 2)
+				d.hullTri[q] = t
+				d.hullNext[e] = e
 				hullSize--
-				e = int(q)
+				e = q
 			}
 		}
 
 		d.hullStart = e
-		d.hullPrev[i] = int(e)
+		d.hullPrev[i] = e
 		d.hullNext[e] = i
 		d.hullPrev[n] = i
 		d.hullNext[i] = n
 
-		d.hullHash[d.hashKey(x, y)] = int(i)
+		d.hullHash[d.hashKey(x, y)] = i
 		d.hullHash[d.hashKey(d.coords[2*e], d.coords[2*e+1])] = e
 	}
 
@@ -313,7 +314,6 @@ func (d *Delaunator) hashKey(x, y float64) int {
 }
 
 func (d *Delaunator) legalize(a int) int {
-
 	i := 0
 	ar := 0
 
@@ -356,24 +356,24 @@ func (d *Delaunator) legalize(a int) int {
 			if hbl == -1 {
 				e := d.hullStart
 				for {
-					if int(d.hullTri[e]) == bl {
+					if d.hullTri[e] == bl {
 						d.hullTri[e] = a
 						break
 					}
-					e = int(d.hullPrev[e])
+					e = d.hullPrev[e]
 					if e != d.hullStart {
 						break
 					}
 				}
 			}
-			d.link(int(a), hbl)
+			d.link(a, hbl)
 			d.link(b, d.halfedges[ar])
-			d.link(int(ar), bl)
+			d.link(ar, bl)
 
 			br := b0 + (b+1)%3
 
 			if i < len(EDGE_STACK) {
-				EDGE_STACK[i] = int(br)
+				EDGE_STACK[i] = br
 				i++
 			}
 		} else {
@@ -396,15 +396,17 @@ func (d *Delaunator) link(a, b int) {
 }
 
 func (d *Delaunator) addTriangle(i0, i1, i2 int, a, b, c int) int {
-	t := len(d.triangles)
+	t := d.trianglesLen
 
 	d.triangles = append(d.triangles, i0)
 	d.triangles = append(d.triangles, i1)
 	d.triangles = append(d.triangles, i2)
 
-	d.link(t, int(a))
-	d.link(t+1, int(b))
-	d.link(t+2, int(c))
+	d.link(t, a)
+	d.link(t+1, b)
+	d.link(t+2, c)
+
+	d.trianglesLen += 3
 
 	return t + 3
 }
